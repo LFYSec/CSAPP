@@ -67,7 +67,7 @@ void doit(int connfd){
         }
     }else{
         if(!check_auth(fstat)){
-            serve_dynamic();
+            serve_dynamic(connfd, filename, cgi_args);
         }else{
             printf("dynamic 403 Forbidden\n");
             clienterror(connfd, "403", "Forbidden", "Forbidden to request this file");
@@ -94,12 +94,14 @@ bool parse_uri(char *uri, char *filename, char *cgi_args){
     char *ptr;
 
     if(strstr(uri, "cgi-bin")){
-        cgi_args = "";
-        ptr = index(uri, "?");
+        ptr = index(uri, '?');
         if(ptr){
             strcpy(cgi_args, ptr+1);
             *ptr = '\0';
+        }else{
+            strcpy(cgi_args, "");
         }
+        //printf("%s", uri);
         //filename[0] = ".";
         strcpy(filename, ".");
         strcat(filename, uri);
@@ -113,8 +115,6 @@ bool parse_uri(char *uri, char *filename, char *cgi_args){
         }else{   
             strcat(filename, uri);
         }
-        printf("%s\n", filename);
-        printf("%s\n", uri);
         return true;
     }
 }
@@ -143,6 +143,17 @@ void serve_static(int connfd, char *filename, struct stat fstat){
     Munmap(src, fstat.st_size);
 }
 
-void serve_dynamic(){
-    printf("222");
+void serve_dynamic(int fd, char *filename, char *cgiargs){
+    char header[MAXLINE], body[MAXLINE], *emp[] = {};
+
+    sprintf(header, "HTTP/1.1 200 OK\r\n");
+    sprintf(header, "%sServer: Tiny Server\r\n", header);
+    Rio_writen(fd, header, strlen(header));
+
+    if(Fork() == 0){
+        setenv("QUERY_STRING", cgiargs, 1);
+        Dup2(fd, STDOUT_FILENO);
+        Execve(filename, emp, environ);
+    }
+    Wait(NULL);
 }
